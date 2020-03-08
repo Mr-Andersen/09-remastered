@@ -47,10 +47,7 @@ IterRes SplitWordsIter_next(
         return IterEnd;
     StrSlice_to_String(slice, res);
     while (slice.str[slice.size - 1] == '\\') {
-        fputs("last slice: '", stdout);
         StrSlice_fput(slice, stdout);
-        puts("'");
-        printf("adding: '%s'\n", res->str);
         if (SplitSpaceIter_next(&self->ss_iter, &slice) != IterOk)
             return IterTotalErr;
         res->str[res->size - 1] = ' ';

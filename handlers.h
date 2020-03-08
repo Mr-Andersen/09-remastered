@@ -2,20 +2,22 @@
 #define __HANDLERS_H__
 
 #include "database.h"
-#include "split_space.h"
 #include "my_string.h"
+#include "parse_args.h"
+#include "split_space.h"
+#include "utils.h"
 
 enum Flow { FlowExit, FlowContinue };
-typedef enum Flow (*InputHandler)(SplitWordsIter_t, Database_t*);
+typedef enum Flow (*InputHandler)(ParseArgs_t, Database_t*);
 struct PatternHandler {
     const char* pattern;
     const char* help_text;
     InputHandler handler;
 };
 
-enum Flow exit_handler(SplitWordsIter_t it, Database_t* database);
-enum Flow help_handler(SplitWordsIter_t it, Database_t* database);
-enum Flow add_handler(SplitWordsIter_t it, Database_t* database);
+enum Flow exit_handler(ParseArgs_t it, Database_t* database);
+enum Flow help_handler(ParseArgs_t it, Database_t* database);
+enum Flow add_handler(ParseArgs_t it, Database_t* database);
 
 static const struct PatternHandler handlers[] = {
     { "exit", "exit -- close shell", exit_handler },
@@ -25,9 +27,9 @@ static const struct PatternHandler handlers[] = {
 static const size_t handlers_num = sizeof(handlers) / sizeof(struct PatternHandler);
 
 
-enum Flow exit_handler(SplitWordsIter_t it, Database_t* database) {
+enum Flow exit_handler(ParseArgs_t it, Database_t* database) {
     String_t word = String_new();
-    SplitWordsIter_next(&it, &word);
+    ParseArgs_next(&it, &word);
     if (word.str != NULL) {
         puts("`exit` doesn't accept arguments. Anyway, exiting");
         String_drop(&word);
@@ -35,11 +37,11 @@ enum Flow exit_handler(SplitWordsIter_t it, Database_t* database) {
     return FlowExit;
 }
 
-enum Flow help_handler(SplitWordsIter_t it, Database_t* database) {
+enum Flow help_handler(ParseArgs_t it, Database_t* database) {
     String_t word = String_new();
     String_t temp = String_new();
-    SplitWordsIter_next(&it, &word);
-    SplitWordsIter_next(&it, &temp);
+    ParseArgs_next(&it, &word);
+    ParseArgs_next(&it, &temp);
     if (temp.str != NULL) {
         puts("`help` accepts either one or no arguments");
         puts(handlers[0].help_text);
@@ -68,8 +70,49 @@ enum Flow help_handler(SplitWordsIter_t it, Database_t* database) {
     return FlowContinue;
 }
 
-enum Flow add_handler(SplitWordsIter_t it, Database_t* database) {
-    puts("add!");
+enum Flow add_handler(ParseArgs_t it, Database_t* database) {
+    String_t owned[database->col_num];
+
+    bool die = false;
+    for (size_t i = 0; i < database->col_num; ++i) {
+        owned[i] = String_new();
+        switch (ParseArgs_next(&it, &owned[i])) {
+            case IterOk:
+                break;
+            case IterTotalErr:
+                ERR("Invalid arguments");
+                die = true;
+                break;
+            case IterEnd:
+                fprintf(stderr, "Not enough arguments: received %zu, expected %zu\n", i, database->col_num);
+                die = true;
+                break;
+            default:
+                ; // unreachable
+        }
+        if (die) {
+            while (i != 0)
+                String_drop(&owned[--i]);
+            break;
+        }
+    }
+
+    StrSlice_t refs[database->col_num];
+
+    if (ParseArgs_next(&it, &owned[0]) != IterEnd) {
+        fprintf(stderr, "Too many arguments: expected %zu", database->col_num);
+        goto wipeout;
+    }
+
+    for (size_t i = 0; i < database->col_num; ++i)
+        refs[i] = String_as_ref(&owned[i]);
+
+    if (Database_add(database, refs) == AddFieldOverflow)
+        ERR("Value is too long");
+
+    wipeout:
+    for (size_t i = 0; i < database->col_num; ++i)
+        String_drop(&owned[i]);
     return FlowContinue;
 }
 

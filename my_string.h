@@ -69,6 +69,31 @@ int String_fput(String_t self, FILE* stream) {
     return !EOF;
 }
 
+StrSlice_t String_as_ref(String_t* self) {
+    StrSlice_t res = { self->str, self->size };
+    return res;
+}
+
+ssize_t String_getline(String_t* self, FILE* buffer) {
+    ssize_t res = getline(&self->str, &self->capacity, buffer);
+    if (res == -1) {
+        self->size = 0;
+        return -1;
+    }
+    self->size = res;
+    return res;
+}
+
+StrSlice_t StrSlice_new(const char* str, size_t size) {
+    StrSlice_t res = { str, size };
+    return res;
+}
+
+StrSlice_t StrSlice_from_raw(const char* str) {
+    StrSlice_t res = { str, strlen(str) };
+    return res;
+}
+
 void StrSlice_fput(StrSlice_t self, FILE* stream) {
     for (size_t i = 0; i < self.size; ++i)
         fputc(*self.str++, stream);
@@ -91,6 +116,12 @@ bool StrSlice_eq_str(StrSlice_t self, const char* str) {
     if (self.str == NULL)
         return false;
     return memcmp(self.str, str, self.size) == 0;
+}
+
+StrSlice_t StrSlice_rstrip(StrSlice_t slice) {
+    while (slice.size > 0 && slice.str[slice.size - 1] == ' ')
+        --slice.size;
+    return slice;
 }
 
 #endif

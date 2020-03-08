@@ -3,8 +3,7 @@
 #include "database.h"
 #include "handlers.h"
 #include "vector.h"
-
-#define ERR(e) fprintf(stderr, "ERROR: %s\n", e);
+#include "utils.h"
 
 int main() {
     int ret_stat = 0;
@@ -14,19 +13,22 @@ int main() {
 
     Column_t columns[] = {
         {32, "fio"},
-        {16, "department"},
+        {32, "department"},
         {16, "position"},
-        {64, "home_address"},
+        {16, "home_address"},
         {16, "phone_number"},
         {128, "courses"}
     };
-    FILE* buffer = fopen("database.txt", "r+");
-    if (buffer == NULL) {
+    Database_t database = Database_new(
+        "database.txt",
+        columns,
+        sizeof(columns) / sizeof(Column_t)
+    );
+    if (database.buffer == NULL) {
         ERR("Problem opening database file");
         ret_stat = 1;
         goto wipeout;
     }
-    Database_t database = {columns, sizeof(columns) / sizeof(Column_t), buffer};
     Database_overview(&database);
 
     for (;;) {
@@ -34,9 +36,9 @@ int main() {
         fflush(stdout);
         getline(&line, &line_size, stdin);
         line[strlen(line) - 1] = '\0';
-        SplitWordsIter_t it = { line };
+        ParseArgs_t it = { line };
         int flow = 0;
-        switch (SplitWordsIter_next(&it, &word)) {
+        switch (ParseArgs_next(&it, &word)) {
             case IterEnd:
                 puts("Use `help [cmd]` for help on specific command or in general");
                 flow = 1;
@@ -71,8 +73,7 @@ int main() {
     }
 
     wipeout:
-    if (buffer != NULL)
-        fclose(buffer);
+    Database_drop(&database);
     if (line != NULL)
         free(line);
     String_drop(&word);
