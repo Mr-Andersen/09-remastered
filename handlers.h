@@ -18,11 +18,17 @@ struct PatternHandler {
 enum Flow exit_handler(ParseArgs_t it, Database_t* database);
 enum Flow help_handler(ParseArgs_t it, Database_t* database);
 enum Flow add_handler(ParseArgs_t it, Database_t* database);
+enum Flow print_handler(ParseArgs_t it, Database_t* database);
+enum Flow delete_handler(ParseArgs_t it, Database_t* database);
+enum Flow resurrect_handler(ParseArgs_t it, Database_t* database);
 
 static const struct PatternHandler handlers[] = {
     { "exit", "exit -- close shell", exit_handler },
     { "help", "help [cmd] -- print help on `cmd` or general help", help_handler },
     { "add", "add <value1> ... -- add row to table, setting value of `column1` to `value1`", add_handler},
+    { "print", "print -- print whole table into console", print_handler },
+    { "delete", "delete <idx> -- mark row #<idx> as deleted", delete_handler },
+    { "resurrect", "resurrect <idx> -- unmark deletion of row #<idx>", resurrect_handler }
 };
 static const size_t handlers_num = sizeof(handlers) / sizeof(struct PatternHandler);
 
@@ -93,7 +99,7 @@ enum Flow add_handler(ParseArgs_t it, Database_t* database) {
         if (die) {
             while (i != 0)
                 String_drop(&owned[--i]);
-            break;
+            return FlowContinue;
         }
     }
 
@@ -107,12 +113,80 @@ enum Flow add_handler(ParseArgs_t it, Database_t* database) {
     for (size_t i = 0; i < database->col_num; ++i)
         refs[i] = String_as_ref(&owned[i]);
 
-    if (Database_add(database, refs) == AddFieldOverflow)
-        ERR("Value is too long");
+    Database_add(database, refs);
 
     wipeout:
     for (size_t i = 0; i < database->col_num; ++i)
         String_drop(&owned[i]);
+    return FlowContinue;
+}
+
+enum Flow print_handler(ParseArgs_t it, Database_t* database) {
+    String_t temp = String_new();
+    if (ParseArgs_next(&it, &temp) != IterEnd) {
+        ERR("`print` does not accept arguments. See `help print`");
+        String_drop(&temp);
+        return FlowContinue;
+    }
+    Database_print(database);
+    return FlowContinue;
+}
+
+enum Flow delete_handler(ParseArgs_t it, Database_t* database) {
+    String_t idx_s = String_new();
+    String_t temp = String_new();
+    if (ParseArgs_next(&it, &idx_s) != IterOk) {
+        ERR("can't parse first argument (must be <idx>)");
+        goto wipeout;
+    }
+
+    if (ParseArgs_next(&it, &temp) != IterEnd) {
+        ERR("`delete` accepts only one argument. See `help delete`");
+        goto wipeout;
+    }
+
+    ssize_t idx = StrSlice_into_decimal(String_as_ref(&idx_s));
+    if (idx == -1) {
+        ERR("<idx> must be decimal");
+        goto wipeout;
+    }
+
+    fflush(database->buffer);
+    if (Database_delete(database, idx) != DeleteOk)
+        ERR("while deleting entry");
+
+    wipeout:
+    String_drop(&temp);
+    String_drop(&idx_s);
+    return FlowContinue;
+}
+
+enum Flow resurrect_handler(ParseArgs_t it, Database_t* database) {
+    String_t idx_s = String_new();
+    String_t temp = String_new();
+    if (ParseArgs_next(&it, &idx_s) != IterOk) {
+        ERR("can't parse first argument (must be <idx>)");
+        goto wipeout;
+    }
+
+    if (ParseArgs_next(&it, &temp) != IterEnd) {
+        ERR("`resurrect` accepts only one argument. See `help resurrect`");
+        goto wipeout;
+    }
+
+    ssize_t idx = StrSlice_into_decimal(String_as_ref(&idx_s));
+    if (idx == -1) {
+        ERR("<idx> must be decimal");
+        goto wipeout;
+    }
+
+    fflush(database->buffer);
+    if (Database_resurrect(database, idx) != DeleteOk)
+        ERR("while resurrecting entry");
+
+    wipeout:
+    String_drop(&temp);
+    String_drop(&idx_s);
     return FlowContinue;
 }
 

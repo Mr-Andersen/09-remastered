@@ -31,6 +31,7 @@ String_t String_clone(String_t self) {
     char* new_str = (char*) malloc(self.size);
     memcpy(new_str, self.str, self.size);
     self.str = new_str;
+    self.capacity = self.size;
     return self;
 }
 
@@ -69,7 +70,20 @@ int String_fput(String_t self, FILE* stream) {
     return !EOF;
 }
 
-StrSlice_t String_as_ref(String_t* self) {
+StrSlice_t StrSlice_new(const char* str, size_t size);
+
+StrSlice_t String_get_slice(const String_t* self, size_t offset, size_t size) {
+    if (self->size < offset + size) {
+        fprintf(
+            stderr,
+            "WARN: String_t out of bounds access in String_get_slice: self->size=%zu, offset=%zu, size=%zu\n",
+            self->size, offset, size
+        );
+    }
+    return StrSlice_new(self->str + offset, size);
+}
+
+StrSlice_t String_as_ref(const String_t* self) {
     StrSlice_t res = { self->str, self->size };
     return res;
 }
@@ -99,7 +113,6 @@ void StrSlice_fput(StrSlice_t self, FILE* stream) {
         fputc(*self.str++, stream);
 }
 
-// void StrSlice_t_to_string(StrSlice_t self, char** res, size_t* res_capacity) {
 void StrSlice_to_String(StrSlice_t self, String_t* res) {
     if (res->capacity < self.size) {
         res->str = (char*) realloc(res->str, self.size);
@@ -122,6 +135,18 @@ StrSlice_t StrSlice_rstrip(StrSlice_t slice) {
     while (slice.size > 0 && slice.str[slice.size - 1] == ' ')
         --slice.size;
     return slice;
+}
+
+ssize_t StrSlice_into_decimal(StrSlice_t slice) {
+    ssize_t res = 0;
+    size_t exp = 1;
+    while (slice.size-- > 0) {
+        if (slice.str[slice.size] < '0' || slice.str[slice.size] > '9')
+            return -1;
+        res += exp * (slice.str[slice.size] - '0');
+        exp *= 10;
+    }
+    return res;
 }
 
 #endif
