@@ -1,3 +1,4 @@
+#include <locale.h>
 #include <stdio.h>
 
 #include "database.h"
@@ -6,6 +7,8 @@
 #include "utils.h"
 
 int main() {
+    setlocale(0, "");
+
     int ret_stat = 0;
     char* line = NULL;
     size_t line_size = 0;
@@ -13,8 +16,8 @@ int main() {
 
     Column_t columns[] = {
         {32, "fio"},
-        {32, "department"},
-        {16, "position"},
+        {64, "department"},
+        {32, "position"},
         {16, "home_address"},
         {16, "phone_number"},
         {128, "courses"}
