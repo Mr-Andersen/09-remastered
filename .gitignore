@@ -1,3 +1,4 @@
 vgcore.*
 *.out
 database.txt
+long-db.txt

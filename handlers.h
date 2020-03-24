@@ -111,9 +111,11 @@ enum Flow add_handler(ParseArgs_t it, Database_t* database) {
     }
 
     for (size_t i = 0; i < database->col_num; ++i)
-        refs[i] = String_as_ref(&owned[i]);
+        refs[i] = String_borrow(&owned[i]);
 
-    Database_add(database, refs);
+    size_t row_idx;
+    if (Database_add(database, refs, &row_idx) != AddOk)
+        ERR("Cannot add entry to database");
 
     wipeout:
     for (size_t i = 0; i < database->col_num; ++i)
@@ -145,15 +147,15 @@ enum Flow delete_handler(ParseArgs_t it, Database_t* database) {
         goto wipeout;
     }
 
-    ssize_t idx = StrSlice_into_decimal(String_as_ref(&idx_s));
+    ssize_t idx = StrSlice_into_decimal(String_borrow(&idx_s));
     if (idx == -1) {
-        ERR("<idx> must be decimal");
+        ERR("<idx> must be decimal (unsigned int)");
         goto wipeout;
     }
 
     fflush(database->buffer);
     if (Database_delete(database, idx) != DeleteOk)
-        ERR("while deleting entry");
+        ERR("Cannot delete entry");
 
     wipeout:
     String_drop(&temp);
@@ -174,7 +176,7 @@ enum Flow resurrect_handler(ParseArgs_t it, Database_t* database) {
         goto wipeout;
     }
 
-    ssize_t idx = StrSlice_into_decimal(String_as_ref(&idx_s));
+    ssize_t idx = StrSlice_into_decimal(String_borrow(&idx_s));
     if (idx == -1) {
         ERR("<idx> must be decimal");
         goto wipeout;
@@ -182,7 +184,7 @@ enum Flow resurrect_handler(ParseArgs_t it, Database_t* database) {
 
     fflush(database->buffer);
     if (Database_resurrect(database, idx) != DeleteOk)
-        ERR("while resurrecting entry");
+        ERR("Cannot resurrect entry");
 
     wipeout:
     String_drop(&temp);

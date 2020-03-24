@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "utils.h"
+
 typedef struct String {
     // Pointer to owned data
     char* str;
@@ -22,13 +24,21 @@ typedef struct StrSlice {
     size_t size;
 } StrSlice_t;
 
-String_t String_new() {
+String_t String_new(void) {
     String_t res = { NULL, 0, 0 };
+    return res;
+}
+
+String_t String_reserve(size_t capacity) {
+    char* ptr = malloc(capacity);
+    ANZ(ptr, "Allocation failed");
+    String_t res = { ptr, 0, capacity };
     return res;
 }
 
 String_t String_clone(String_t self) {
     char* new_str = (char*) malloc(self.size);
+    ANZ(new_str, "Allocation failed");
     memcpy(new_str, self.str, self.size);
     self.str = new_str;
     self.capacity = self.size;
@@ -45,6 +55,7 @@ void String_extend_with_StrSlice(String_t* self, struct StrSlice slice) {
     if (self->capacity < self->size + slice.size) {
         self->capacity = self->size + slice.size;
         self->str = (char*) realloc(self->str, self->capacity);
+        ANZ(self->str, "Allocation failed");
     }
     memcpy(self->str + self->size, slice.str, slice.size);
     self->size += slice.size;
@@ -83,7 +94,7 @@ StrSlice_t String_get_slice(const String_t* self, size_t offset, size_t size) {
     return StrSlice_new(self->str + offset, size);
 }
 
-StrSlice_t String_as_ref(const String_t* self) {
+StrSlice_t String_borrow(const String_t* self) {
     StrSlice_t res = { self->str, self->size };
     return res;
 }
@@ -116,6 +127,7 @@ void StrSlice_fput(StrSlice_t self, FILE* stream) {
 void StrSlice_to_String(StrSlice_t self, String_t* res) {
     if (res->capacity < self.size) {
         res->str = (char*) realloc(res->str, self.size);
+        ANZ(res->str, "Allocation failed");
         res->capacity = self.size;
     }
     if (self.str != NULL)
@@ -128,7 +140,9 @@ bool StrSlice_eq_str(StrSlice_t self, const char* str) {
         return true;
     if (self.str == NULL)
         return false;
-    return memcmp(self.str, str, self.size) == 0;
+    return
+        strlen(str) == self.size
+        && memcmp(self.str, str, self.size) == 0;
 }
 
 StrSlice_t StrSlice_rstrip(StrSlice_t slice) {

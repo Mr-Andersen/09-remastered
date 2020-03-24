@@ -3,63 +3,74 @@
 
 #include "iterator.h"
 #include "my_string.h"
+#include "utils.h"
 
 // ParseArgs: ` arg1   "ar\"g\\2"` -> [`arg1`, `ar"g\2`]
 
 typedef struct {
-    const char* str;
+    StrSlice_t slice;
 } ParseArgs_t;
 
-ParseArgs_t ParseArgs_new(const char* str) {
-    ParseArgs_t res = { str };
+ParseArgs_t ParseArgs_new(StrSlice_t slice) {
+    ParseArgs_t res = { slice };
     return res;
 }
 
 IterRes ParseArgs_next(ParseArgs_t* self, String_t* res) {
     // skip all spaces
-    while (*self->str == ' ')
-        ++self->str;
-    StrSlice_t slice;
-    switch (*self->str) {
-        case '\0':
-            return IterEnd;
+    while (*self->slice.str == ' ' && self->slice.size > 0) {
+        ++self->slice.str;
+        --self->slice.size;
+    }
+    if (self->slice.size == 0)
+        return IterEnd;
+    StrSlice_t part;
+    switch (*self->slice.str) {
         case '"':
             res->size = 0;
-            slice.str = ++self->str;
-            for (; *self->str != '\0'; ++self->str) {
-                switch (*self->str) {
+            part.str = ++self->slice.str;
+            --self->slice.size;
+            for (; self->slice.size > 0; ++self->slice.str, --self->slice.size) {
+                switch (*self->slice.str) {
                     case '"':
-                        slice.size = self->str - slice.str;
-                        String_extend_with_StrSlice(res, slice);
-                        ++self->str;
+                        part.size = self->slice.str - part.str;
+                        String_extend_with_StrSlice(res, part);
+                        ++self->slice.str;
+                        --self->slice.size;
                         return IterOk;
                     case '\\':
-                        slice.size = self->str - slice.str;
-                        String_extend_with_StrSlice(res, slice);
-                        ++self->str;
-                        slice.str = self->str;
-                        switch (*self->str) {
+                        part.size = self->slice.str - part.str;
+                        String_extend_with_StrSlice(res, part);
+                        ++self->slice.str;
+                        --self->slice.size;
+                        part.str = self->slice.str;
+                        switch (*self->slice.str) {
                             case '\\':
                             case '"':
                                 break;
                             default:
+                                ERR("Something aside from '\"' or '\\' appeared after '\\'");
                                 return IterTotalErr;
                         }
                 }
             }
             return IterTotalErr;
         default:
-            slice.str = self->str;
+            part.str = self->slice.str;
             while (
-                *self->str != '\0'
-                && *self->str != ' '
-                && *self->str != '"'
-            )
-                ++self->str;
-            slice.size = self->str - slice.str;
-            if (*self->str == ' ' || *self->str == '"')
-                ++self->str;
-            StrSlice_to_String(slice, res);
+                self->slice.size > 0
+                && *self->slice.str != ' '
+                && *self->slice.str != '"'
+            ) {
+                ++self->slice.str;
+                --self->slice.size;
+            }
+            part.size = self->slice.str - part.str;
+            if (self->slice.size > 0 && (*self->slice.str == ' ' || *self->slice.str == '"')) {
+                ++self->slice.str;
+                --self->slice.size;
+            }
+            StrSlice_to_String(part, res);
             return IterOk;
     }
 }

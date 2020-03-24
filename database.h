@@ -45,7 +45,8 @@ typedef struct {
 // Must use rewind(database->buffer) if want to start from the beginning
 // and fflush(*) if want up-to-date state
 RowsIter_t RowsIter_new(Database_t* database) {
-    RowsIter_t res = { database, String_new() };
+    // additional 1 for \0 (added automatically by getline)
+    RowsIter_t res = { database, String_reserve(database->row_size + 1) };
     return res;
 }
 
@@ -134,7 +135,7 @@ void Database_print(Database_t* self) {
 
 typedef enum { AddOk, AddFieldOverflow } AddStatus_t;
 
-AddStatus_t Database_add(Database_t* self, StrSlice_t* vals) {
+AddStatus_t Database_add(Database_t* self, StrSlice_t* vals, size_t* row_idx) {
     // Check that all slices are not longer than should be
     for (size_t col_idx = 0; col_idx < self->col_num; ++col_idx)
         if (vals[col_idx].size > self->columns[col_idx].size) {
@@ -145,7 +146,10 @@ AddStatus_t Database_add(Database_t* self, StrSlice_t* vals) {
         }
 
     // TODO: find row starting with `-` OR go to end
+    // yet, it just goes to end
     fseek(self->buffer, 0, SEEK_END);
+    *row_idx = ftell(self->buffer) / self->row_size;
+    printf("%zu\n", *row_idx);
     fputc('+', self->buffer);
     for (size_t col_idx = 0; col_idx < self->col_num; ++col_idx) {
         StrSlice_fput(vals[col_idx], self->buffer);

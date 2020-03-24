@@ -3,24 +3,22 @@
 
 #include "database.h"
 #include "handlers.h"
-#include "vector.h"
 #include "utils.h"
 
-int main() {
+int main(void) {
     setlocale(0, "");
 
     int ret_stat = 0;
-    char* line = NULL;
-    size_t line_size = 0;
+    String_t line = String_new();
     String_t word = String_new();
 
     Column_t columns[] = {
         {32, "fio"},
-        {64, "department"},
+        /*{64, "department"},
         {32, "position"},
-        {16, "home_address"},
+        {16, "home_address"},*/
         {16, "phone_number"},
-        {128, "courses"}
+        // {128, "courses"}
     };
     Database_t database = Database_new(
         "database.txt",
@@ -37,19 +35,21 @@ int main() {
     for (;;) {
         fputs("$ ", stdout);
         fflush(stdout);
-        getline(&line, &line_size, stdin);
-        line[strlen(line) - 1] = '\0';
-        ParseArgs_t it = { line };
+        String_getline(&line, stdin);
+        if (feof(stdin))
+            goto wipeout;
+        --line.size; // cut off last \n
+        ParseArgs_t it = { String_borrow(&line) };
         int flow = 0;
         switch (ParseArgs_next(&it, &word)) {
             case IterEnd:
-                puts("Use `help [cmd]` for help on specific command or in general");
+                puts("Use `help [cmd]` for help on specific command or in general\n");
                 flow = 1;
                 break;
             case IterSingleErr:
             case IterTotalErr:
                 puts("Can't parse as valid arguments");
-                puts("Use `help [cmd]` for help on specific command or in general");
+                puts("Use `help [cmd]` for help on specific command or in general\n");
                 flow = 1;
                 break;
             case IterOk:
@@ -67,7 +67,8 @@ int main() {
                 switch (flow) {
                     case FlowExit:
                         goto wipeout;
-                    default: ;
+                    default:
+                        ;
                 }
                 break;
             }
@@ -77,8 +78,7 @@ int main() {
 
     wipeout:
     Database_drop(&database);
-    if (line != NULL)
-        free(line);
+    String_drop(&line);
     String_drop(&word);
     return ret_stat;
 }
