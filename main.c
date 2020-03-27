@@ -36,8 +36,10 @@ int main(void) {
         fputs("$ ", stdout);
         fflush(stdout);
         String_getline(&line, stdin);
-        if (feof(stdin))
+        if (feof(stdin)) {
+            puts("^D");
             goto wipeout;
+        }
         --line.size; // cut off last \n
         ParseArgs_t it = { String_borrow(&line) };
         int flow = 0;

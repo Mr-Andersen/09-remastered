@@ -5,5 +5,6 @@
 ## Editing/quering database
 - [ ] `add <value...>` -- add a row with given values, prints it's `idx`
 - [ ] `print` -- print whole database in console
-- [ ] `update <row_idx> <column> <value>` -- set value in `column` to `value` in row `#row_idx`
+- [ ] `find <col_idx> <value>` -- find all entries where column `#col_idx` is equal to `value`
+- [ ] `update <row_idx> <col_idx> <value>` -- set value in column `#col_idx` to `value` in row `#row_idx`
 - [ ] `remove <idx>` -- mark row as deleted (won't affect other row's indices)

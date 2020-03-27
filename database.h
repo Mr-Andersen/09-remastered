@@ -103,7 +103,7 @@ IterRes RowsIter_next(RowsIter_t* self, StrSlice_t* slices, size_t* row_idx) {
 void Database_overview(Database_t* self) {
     puts("Database columns:");
     for (size_t i = 0; i < self->col_num; ++i)
-        printf("name: %s, size: %zu\n", self->columns[i].name, self->columns[i].size);
+        printf("%zu: %s (%zu)\n", i, self->columns[i].name, self->columns[i].size);
     putchar('\n');
 }
 
