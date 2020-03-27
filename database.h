@@ -64,7 +64,7 @@ IterRes RowsIter_next(RowsIter_t* self, StrSlice_t* slices, size_t* row_idx) {
         *row_idx = self->row_idx++;
         if (res == 1) {
             // Empty string, consists only of \n
-            ERR("while parsing row in database -- skipping");
+            ERR("encountered empty row in database -- skipping");
             continue;
         }
         if (self->line.size != self->database->row_size) {

@@ -1,6 +1,7 @@
 ## Managing databases
 - [ ] `migrate <size>...` -- change column sizes to `<size>...`
 - [ ] `create name <column size>...` -- create new database in file `name.txt`, with columns/sizes as given
+- [ ] `copy name` -- copy entries from database `name` (ex: `copy sample-database.txt`)
 
 ## Editing/quering database
 - [ ] `add <value...>` -- add a row with given values, prints it's `idx`
