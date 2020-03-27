@@ -61,10 +61,11 @@ void String_extend_with_StrSlice(String_t* self, struct StrSlice slice) {
     self->size += slice.size;
 }
 
+StrSlice_t StrSlice_from_raw(const char* str);
+
 // void str_extend_with_str(char** self, size_t* self_capacity, const char* rhs) {
 void String_extend_with_str(String_t* self, const char* rhs) {
-    StrSlice_t slice = { rhs, strlen(rhs) };
-    String_extend_with_StrSlice(self, slice);
+    String_extend_with_StrSlice(self, StrSlice_from_raw(rhs));
 }
 
 bool String_eq_str(String_t self, const char* str) {
@@ -72,13 +73,6 @@ bool String_eq_str(String_t self, const char* str) {
     if (str_size != self.size)
         return false;
     return memcmp(self.str, str, str_size) == 0;
-}
-
-int String_fput(String_t self, FILE* stream) {
-    for (size_t i = 0; i < self.size; ++i)
-        if (fputc(self.str[i], stream) == EOF)
-            return EOF;
-    return !EOF;
 }
 
 StrSlice_t StrSlice_new(const char* str, size_t size);
@@ -119,19 +113,23 @@ StrSlice_t StrSlice_from_raw(const char* str) {
     return res;
 }
 
-void StrSlice_fput(StrSlice_t self, FILE* stream) {
+int StrSlice_fput(StrSlice_t self, FILE* stream) {
     for (size_t i = 0; i < self.size; ++i)
-        fputc(*self.str++, stream);
+        if (fputc(*self.str++, stream) == EOF)
+            return EOF;
+    return !EOF;
 }
 
 void StrSlice_to_String(StrSlice_t self, String_t* res) {
+    if (self.str == NULL) {
+        FATAL("StrSlice_to_String on NULL-pointing slice");
+    }
     if (res->capacity < self.size) {
         res->str = (char*) realloc(res->str, self.size);
         ANZ(res->str, "Allocation failed");
         res->capacity = self.size;
     }
-    if (self.str != NULL)
-        memcpy(res->str, self.str, self.size);
+    memcpy(res->str, self.str, self.size);
     res->size = self.size;
 }
 
@@ -145,8 +143,8 @@ bool StrSlice_eq_str(StrSlice_t self, const char* str) {
         && memcmp(self.str, str, self.size) == 0;
 }
 
-StrSlice_t StrSlice_rstrip(StrSlice_t slice) {
-    while (slice.size > 0 && slice.str[slice.size - 1] == ' ')
+StrSlice_t StrSlice_rstrip(StrSlice_t slice, char sym) {
+    while (slice.size > 0 && slice.str[slice.size - 1] == sym)
         --slice.size;
     return slice;
 }

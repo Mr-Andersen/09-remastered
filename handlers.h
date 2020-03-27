@@ -66,7 +66,7 @@ enum Flow help_handler(ParseArgs_t it, Database_t* database) {
             }
         if (i == handlers_num) {
             fputs("Unknown command `", stdout);
-            String_fput(word, stdout);
+            StrSlice_fput(String_borrow(&word), stdout);
             puts("`. Use `help` for list of commands");
         }
     }

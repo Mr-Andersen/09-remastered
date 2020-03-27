@@ -74,7 +74,7 @@ IterRes RowsIter_next(RowsIter_t* self, StrSlice_t* slices, size_t* row_idx) {
                 self->line.size,
                 self->database->row_size
             );
-            String_fput(self->line, stderr);
+            StrSlice_fput(String_borrow(&self->line), stderr);
             fputs("\"\n", stderr);
             return IterSingleErr;
         }
@@ -90,11 +90,14 @@ IterRes RowsIter_next(RowsIter_t* self, StrSlice_t* slices, size_t* row_idx) {
     }
     size_t offset = 1;
     for (size_t i = 0; i < self->database->col_num; ++i) {
-        slices[i] = StrSlice_rstrip(String_get_slice(
-            &self->line,
-            offset,
-            self->database->columns[i].size
-        ));
+        slices[i] = StrSlice_rstrip(
+            String_get_slice(
+                &self->line,
+                offset,
+                self->database->columns[i].size
+            ),
+            ' '
+        );
         offset += self->database->columns[i].size + 1;
     }
     return IterOk;
