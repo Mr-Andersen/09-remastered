@@ -38,61 +38,84 @@ void Database_drop(Database_t* self) {
 
 typedef struct {
     Database_t* database;
-    String_t line;
     size_t row_idx;
 } RowsIter_t;
 
-// Must use rewind(database->buffer) if want to start from the beginning
-// and fflush(*) if want up-to-date state
-RowsIter_t RowsIter_new(Database_t* database) {
-    // additional 1 for \0 (added automatically by getline)
-    RowsIter_t res = { database, String_reserve(database->row_size + 1) };
+typedef struct {
+    String_t line;
+    size_t idx;
+    StrSlice_t* values;
+    bool alive;
+} Row_t;
+
+Row_t Row_new(size_t line_size, size_t values_num) {
+    StrSlice_t* values = calloc(values_num, sizeof(StrSlice_t));
+    ANZ(values, "Allocation failed");
+    Row_t res = {
+        String_reserve(line_size),
+        0,
+        values,
+        false
+    };
     return res;
 }
 
-void RowsIter_drop(RowsIter_t* self) {
+void Row_drop(Row_t* self) {
     String_drop(&self->line);
+    free(self->values);
+}
+
+RowsIter_t RowsIter_new(Database_t* database) {
+    fflush(database->buffer);
+    rewind(database->buffer);
+    // additional 1 for \0 (added automatically by getline)
+    RowsIter_t res = { database, 0 };
+    return res;
 }
 
 // slices: [StrSlice; self->database->col_num]
-IterRes RowsIter_next(RowsIter_t* self, StrSlice_t* slices, size_t* row_idx) {
+IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
     ssize_t res;
     for (;;) {
-        res = String_getline(&self->line, self->database->buffer);
+        res = String_getline(&row->line, self->database->buffer);
         if (res == EOF)
             return IterEnd;
-        *row_idx = self->row_idx++;
+        row->idx = self->row_idx++;
         if (res == 1) {
             // Empty string, consists only of \n
             ERR("encountered empty row in database -- skipping");
             continue;
         }
-        if (self->line.size != self->database->row_size) {
+        if (row->line.size != self->database->row_size) {
             fprintf(
                 stderr,
                 "ERROR: size of read line (%zu) != expected size of row (%zu)\n\"",
-                self->line.size,
+                row->line.size,
                 self->database->row_size
             );
-            StrSlice_fput(String_borrow(&self->line), stderr);
+            StrSlice_fput(String_borrow(&row->line), stderr);
             fputs("\"\n", stderr);
             return IterSingleErr;
         }
-        if (self->line.str[0] == '+')
+        if (row->line.str[0] == '+') {
+            row->alive = true;
             break;
-        if (self->line.str[0] == '-')
-            continue;
+        }
+        if (row->line.str[0] == '-') {
+            row->alive = false;
+            break;
+        }
         fprintf(
             stderr,
             "ERROR: line starts with wrong character: '%c'\n",
-            self->line.str[0]
+            row->line.str[0]
         );
     }
     size_t offset = 1;
     for (size_t i = 0; i < self->database->col_num; ++i) {
-        slices[i] = StrSlice_rstrip(
+        row->values[i] = StrSlice_rstrip(
             String_get_slice(
-                &self->line,
+                &row->line,
                 offset,
                 self->database->columns[i].size
             ),
@@ -110,20 +133,22 @@ void Database_overview(Database_t* self) {
     putchar('\n');
 }
 
-void Database_print(Database_t* self) {
-    fflush(self->buffer);
-    rewind(self->buffer);
+void Database_print(Database_t* self, bool filter_dead) {
     RowsIter_t it = RowsIter_new(self);
-    StrSlice_t vals[self->col_num];
-    size_t row_idx;
+    Row_t row = Row_new(self->row_size, self->col_num);
     bool die = false;
     for (; !die;) {
-        switch (RowsIter_next(&it, vals, &row_idx)) {
+        switch (RowsIter_next(&it, &row)) {
             case IterOk:
-                printf("%zu", row_idx);
+                if (filter_dead && !row.alive)
+                    break;
+                printf("%zu", row.idx);
+                if (!filter_dead)
+                    printf(" | %c", row.alive ? '+' : '-');
+                // StrSlice_fput(String_borrow(&row.line), stdout);
                 for (size_t i = 0; i < self->col_num; ++i) {
-                    fputs(" : ", stdout);
-                    StrSlice_fput(vals[i], stdout);
+                    fputs(" | ", stdout);
+                    StrSlice_fput(row.values[i], stdout);
                 }
                 putchar('\n');
                 break;
@@ -133,7 +158,7 @@ void Database_print(Database_t* self) {
                 die = true;
         }
     }
-    RowsIter_drop(&it);
+    Row_drop(&row);
 }
 
 typedef enum { AddOk, AddFieldOverflow } AddStatus_t;
