@@ -113,11 +113,11 @@ StrSlice_t StrSlice_from_raw(const char* str) {
     return res;
 }
 
-int StrSlice_fput(StrSlice_t self, FILE* stream) {
+void StrSlice_fput(StrSlice_t self, FILE* stream) {
     for (size_t i = 0; i < self.size; ++i)
-        if (fputc(*self.str++, stream) == EOF)
-            return EOF;
-    return !EOF;
+        if (fputc(*self.str++, stream) == EOF) {
+            FATAL("fputc() == EOF");
+        }
 }
 
 void StrSlice_to_String(StrSlice_t self, String_t* res) {

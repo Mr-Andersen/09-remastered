@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "iterator.h"
+#include "fs_fallible.h"
 #include "my_string.h"
 #include "utils.h"
 
@@ -29,6 +30,7 @@ typedef struct {
 } RowsIter_t;
 
 typedef struct {
+    Database_t* database;
     String_t line;
     size_t idx;
     StrSlice_t* values;
@@ -39,12 +41,25 @@ Row_t Row_new(size_t line_size, size_t values_num) {
     StrSlice_t* values = calloc(values_num, sizeof(StrSlice_t));
     ANZ(values, "Allocation failed");
     Row_t res = {
+        NULL,
         String_reserve(line_size),
         0,
         values,
         false
     };
     return res;
+}
+
+void Row_commit(Row_t* self) {
+    // 1. Goto needed row
+    fflush_(self->database->buffer);
+    fseek_(
+        self->database->buffer,
+        self->idx * self->database->row_size,
+        SEEK_SET
+    );
+    // 2. Write contents of line in it
+    StrSlice_fput(String_borrow(&self->line), self->database->buffer);
 }
 
 void Row_drop(Row_t* self) {
@@ -67,11 +82,6 @@ IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
         if (res == EOF)
             return IterEnd;
         row->idx = self->row_idx++;
-        if (res == 1) {
-            // Empty string, consists only of \n
-            ERR("encountered empty row in database -- skipping");
-            continue;
-        }
         if (row->line.size != self->database->row_size) {
             fprintf(
                 stderr,
@@ -81,7 +91,7 @@ IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
             );
             StrSlice_fput(String_borrow(&row->line), stderr);
             fputs("\"\n", stderr);
-            return IterSingleErr;
+            FATAL("database broken");
         }
         if (row->line.str[0] == '+') {
             row->alive = true;
@@ -109,6 +119,7 @@ IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
         );
         offset += self->database->columns[i].size + 1;
     }
+    row->database = self->database;
     return IterOk;
 }
 
@@ -186,16 +197,16 @@ AddStatus_t Database_add(Database_t* self, StrSlice_t* vals, size_t* row_idx) {
 
     // TODO: find row starting with `-` OR go to end
     // yet, it just goes to end
-    fseek(self->buffer, 0, SEEK_END);
+    fseek_(self->buffer, 0, SEEK_END);
     *row_idx = ftell(self->buffer) / self->row_size;
     printf("%zu\n", *row_idx);
-    fputc('+', self->buffer);
+    fputc_('+', self->buffer);
     for (size_t col_idx = 0; col_idx < self->col_num; ++col_idx) {
         StrSlice_fput(vals[col_idx], self->buffer);
         for (size_t pad = vals[col_idx].size; pad < self->columns[col_idx].size + (col_idx != self->col_num - 1); ++pad)
-            fputc(' ', self->buffer);
+            fputc_(' ', self->buffer);
     }
-    fputc('\n', self->buffer);
+    fputc_('\n', self->buffer);
     return AddOk;
 }
 
@@ -203,49 +214,38 @@ DeleteStatus_t Database_delete(Database_t* self, size_t idx) {
     if (fseek(self->buffer, 0, SEEK_END))
         return DeleteIOErr;
     long last_idx = ftell(self->buffer);
-    if (last_idx == -1)
-        return DeleteIOErr;
+    if (last_idx == -1L) { FATAL("ftell() == -1L"); }
     size_t symbol_idx = idx * self->row_size;
     if (symbol_idx > last_idx)
         return DeleteOutOfBounds;
-    if (fseek(self->buffer, symbol_idx, SEEK_SET))
-        return DeleteIOErr;
+    fseek_(self->buffer, symbol_idx, SEEK_SET);
     int symbol = fgetc(self->buffer);
-    if (symbol == EOF)
-        return DeleteIOErr;
+    if (symbol == EOF) { FATAL("fgetc() == EOF"); }
     if (symbol == '-')
         return DeleteAlready;
     if (symbol != '+')
         return DeleteWrongSymbol;
-    if (fseek(self->buffer, symbol_idx, SEEK_SET))
-        return DeleteIOErr;
-    if (fputc('-', self->buffer) == EOF)
-        return DeleteIOErr;
+    fseek_(self->buffer, symbol_idx, SEEK_SET);
+    fputc_('-', self->buffer);
     return DeleteOk;
 }
 
 ResurrectStatus_t Database_resurrect(Database_t* self, size_t idx) {
-    if (fseek(self->buffer, 0, SEEK_END))
-        return ResurrectIOErr;
+    fseek_(self->buffer, 0, SEEK_END);
     long last_idx = ftell(self->buffer);
-    if (last_idx == -1)
-        return ResurrectIOErr;
+    if (last_idx == -1L) { FATAL("ftell() == -1L"); }
     size_t symbol_idx = idx * self->row_size;
     if (symbol_idx > last_idx)
         return ResurrectOutOfBounds;
-    if (fseek(self->buffer, symbol_idx, SEEK_SET))
-        return ResurrectIOErr;
+    fseek_(self->buffer, symbol_idx, SEEK_SET);
     int symbol = fgetc(self->buffer);
-    if (symbol == EOF)
-        return ResurrectIOErr;
+    if (symbol == EOF) { FATAL("fgetc() == EOF"); }
     if (symbol == '+')
         return ResurrectAlready;
     if (symbol != '-')
         return ResurrectWrongSymbol;
-    if (fseek(self->buffer, symbol_idx, SEEK_SET))
-        return ResurrectIOErr;
-    if (fputc('+', self->buffer) == EOF)
-        return ResurrectIOErr;
+    fseek_(self->buffer, symbol_idx, SEEK_SET);
+    fputc_('+', self->buffer);
     return ResurrectOk;
 }
 
