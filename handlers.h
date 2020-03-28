@@ -24,11 +24,11 @@ enum Flow delete_handler(ParseArgs_t it, Database_t* database);
 enum Flow resurrect_handler(ParseArgs_t it, Database_t* database);
 
 static const struct PatternHandler handlers[] = {
-    { "exit", "exit -- close shell", exit_handler },
+    { "exit", "exit -- close shell (^D also works)", exit_handler },
     { "help", "help [cmd] -- print help on `cmd` or general help", help_handler },
     { "add", "add <value1> ... -- add row to table, setting value of `column1` to `value1`", add_handler},
-    { "print", "print -- print whole table into console", print_handler },
-    { "printall", "printall -- print whole table into console, including deleted entries", printall_handler },
+    { "print", "print -- print alive entries into console", print_handler },
+    { "printall", "printall -- print whole table into console", printall_handler },
     { "delete", "delete <idx> -- mark row #<idx> as deleted", delete_handler },
     { "resurrect", "resurrect <idx> -- unmark deletion of row #<idx>", resurrect_handler }
 };

@@ -23,19 +23,6 @@ typedef struct {
     FILE* buffer;
 } Database_t;
 
-Database_t Database_new(const char* filename, const Column_t* columns, size_t col_num) {
-    size_t row_size = 1;
-    for (size_t i = 0; i < col_num; ++i)
-        row_size += columns[i].size + 1;
-    Database_t res = { columns, col_num, row_size, fopen(filename, "r+b") };
-    return res;
-}
-
-void Database_drop(Database_t* self) {
-    if (self->buffer != NULL)
-        fclose(self->buffer);
-}
-
 typedef struct {
     Database_t* database;
     size_t row_idx;
@@ -73,7 +60,6 @@ RowsIter_t RowsIter_new(Database_t* database) {
     return res;
 }
 
-// slices: [StrSlice; self->database->col_num]
 IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
     ssize_t res;
     for (;;) {
@@ -126,6 +112,33 @@ IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
     return IterOk;
 }
 
+typedef enum { AddOk, AddFieldOverflow } AddStatus_t;
+
+typedef enum {
+    DeleteOk, DeleteAlready,
+    DeleteOutOfBounds, DeleteWrongSymbol,
+    DeleteIOErr
+} DeleteStatus_t;
+
+typedef enum {
+    ResurrectOk, ResurrectAlready,
+    ResurrectOutOfBounds, ResurrectWrongSymbol,
+    ResurrectIOErr
+} ResurrectStatus_t;
+
+Database_t Database_new(const char* filename, const Column_t* columns, size_t col_num) {
+    size_t row_size = 1;
+    for (size_t i = 0; i < col_num; ++i)
+        row_size += columns[i].size + 1;
+    Database_t res = { columns, col_num, row_size, fopen(filename, "r+b") };
+    return res;
+}
+
+void Database_drop(Database_t* self) {
+    if (self->buffer != NULL)
+        fclose(self->buffer);
+}
+
 void Database_overview(Database_t* self) {
     puts("Database columns:");
     for (size_t i = 0; i < self->col_num; ++i)
@@ -161,8 +174,6 @@ void Database_print(Database_t* self, bool filter_dead) {
     Row_drop(&row);
 }
 
-typedef enum { AddOk, AddFieldOverflow } AddStatus_t;
-
 AddStatus_t Database_add(Database_t* self, StrSlice_t* vals, size_t* row_idx) {
     // Check that all slices are not longer than should be
     for (size_t col_idx = 0; col_idx < self->col_num; ++col_idx)
@@ -188,12 +199,6 @@ AddStatus_t Database_add(Database_t* self, StrSlice_t* vals, size_t* row_idx) {
     return AddOk;
 }
 
-typedef enum {
-    DeleteOk, DeleteAlready,
-    DeleteOutOfBounds, DeleteWrongSymbol,
-    DeleteIOErr
-} DeleteStatus_t;
-
 DeleteStatus_t Database_delete(Database_t* self, size_t idx) {
     if (fseek(self->buffer, 0, SEEK_END))
         return DeleteIOErr;
@@ -218,12 +223,6 @@ DeleteStatus_t Database_delete(Database_t* self, size_t idx) {
         return DeleteIOErr;
     return DeleteOk;
 }
-
-typedef enum {
-    ResurrectOk, ResurrectAlready,
-    ResurrectOutOfBounds, ResurrectWrongSymbol,
-    ResurrectIOErr
-} ResurrectStatus_t;
 
 ResurrectStatus_t Database_resurrect(Database_t* self, size_t idx) {
     if (fseek(self->buffer, 0, SEEK_END))
