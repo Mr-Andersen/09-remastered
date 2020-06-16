@@ -7,6 +7,7 @@
 #include "iterator.h"
 #include "fs_fallible.h"
 #include "my_string.h"
+#include "str_view.h"
 #include "utils.h"
 
 typedef struct {
@@ -33,12 +34,12 @@ typedef struct {
     Database_t* database;
     String_t line;
     size_t idx;
-    StrSlice_t* values;
+    StrView_t* values;
     bool alive;
 } Row_t;
 
 Row_t Row_new(size_t line_size, size_t values_num) {
-    StrSlice_t* values = calloc(values_num, sizeof(StrSlice_t));
+    StrView_t* values = calloc(values_num, sizeof(StrView_t));
     ANZ(values, "Allocation failed");
     Row_t res = {
         NULL,
@@ -109,13 +110,19 @@ IterRes RowsIter_next(RowsIter_t* self, Row_t* row) {
     }
     size_t offset = 1;
     for (size_t i = 0; i < self->database->col_num; ++i) {
-        row->values[i] = StrSlice_rstrip(
+        size_t size = StrSlice_rstrip(
             String_get_slice(
                 &row->line,
                 offset,
                 self->database->columns[i].size
             ),
             ' '
+        ).size;
+        row->values[i] = String_get_view(
+            &row->line,
+            offset,
+            size,
+            self->database->columns[i].size
         );
         offset += self->database->columns[i].size + 1;
     }
